@@ -10,6 +10,8 @@
     "seed:chat": "tsx scripts/seed-chat-rooms.ts"
   },
   "dependencies": {
+    "@100mslive/hms-video-store": "^0.12.39",
+    "@100mslive/roomkit-react": "^0.3.39",
     "@prisma/client": "^6.19.0",
     "@supabase/realtime-js": "^2.81.0",
     "@supabase/supabase-js": "^2.81.0",

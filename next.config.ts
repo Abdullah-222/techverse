@@ -10,8 +10,12 @@ const nextConfig: NextConfig = {
   },
 
   webpack: (config: any, { isServer }: { isServer: boolean }) => {
+    // --- Ignore the broken 100ms virtual background module globally ---
+    config.resolve.alias["@100mslive/hms-virtual-background"] = false;
+
     // --- Replace @mediapipe/selfie_segmentation with dummy module ---
-    // This prevents build errors when the feature is disabled
+    // This prevents build errors when the feature is disabled in 100ms dashboard
+    // but the SDK still tries to import it
     const path = require("path");
     config.resolve.alias["@mediapipe/selfie_segmentation"] = path.resolve(
       __dirname,

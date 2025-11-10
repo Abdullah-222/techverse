@@ -125,6 +125,19 @@ export default function Home() {
                 Create payment checkout sessions with Stripe
               </p>
             </Link>
+
+            <Link
+              href="/meeting"
+              className="p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl hover:shadow-lg transition-shadow"
+            >
+              <div className="text-3xl mb-3">🎥</div>
+              <h2 className="text-xl font-semibold text-zinc-900 dark:text-white mb-2">
+                Video Meeting
+              </h2>
+              <p className="text-zinc-600 dark:text-zinc-400">
+                Join 100ms video streaming meetings
+              </p>
+            </Link>
           </div>
         ) : (
           <div className="text-center py-20">
