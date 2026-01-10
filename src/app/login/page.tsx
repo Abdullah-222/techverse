@@ -1,11 +1,21 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { signIn } from 'next-auth/react'
 
+/**
+ * Login Page for BooksExchange
+ * 
+ * Uses NextAuth's signIn function for authentication.
+ * Supports redirect to callbackUrl after successful login.
+ */
 export default function LoginPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const callbackUrl = searchParams.get('callbackUrl') || '/'
+  
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -17,25 +27,26 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
+      // Use NextAuth's signIn function
+      // This handles the authentication flow and session creation
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false, // Handle redirect manually to show errors
       })
 
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.error || 'Login failed')
+      if (result?.error) {
+        // Generic error message to prevent user enumeration
+        setError('Invalid email or password')
         setLoading(false)
         return
       }
 
-      // Redirect to home page
-      router.push('/')
-      router.refresh()
+      if (result?.ok) {
+        // Successful login - redirect to callback URL or home
+        router.push(callbackUrl)
+        router.refresh()
+      }
     } catch (err) {
       setError('An error occurred. Please try again.')
       setLoading(false)
@@ -48,10 +59,10 @@ export default function LoginPage() {
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-xl p-8">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-zinc-900 dark:text-white mb-2">
-              Welcome back
+              Sign in
             </h1>
             <p className="text-zinc-600 dark:text-zinc-400">
-              Sign in to your account to continue
+              Welcome back to BooksExchange
             </p>
           </div>
 
@@ -74,6 +85,7 @@ export default function LoginPage() {
                 required
                 className="w-full px-4 py-3 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 placeholder="you@example.com"
+                autoComplete="email"
               />
             </div>
 
@@ -89,6 +101,7 @@ export default function LoginPage() {
                 required
                 className="w-full px-4 py-3 border border-zinc-300 dark:border-zinc-700 rounded-lg bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 placeholder="••••••••"
+                autoComplete="current-password"
               />
             </div>
 

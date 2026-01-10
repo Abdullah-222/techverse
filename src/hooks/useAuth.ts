@@ -1,51 +1,43 @@
+/**
+ * Client-side authentication hook
+ * 
+ * Provides access to current user session in client components.
+ * Uses NextAuth's useSession hook under the hood.
+ * 
+ * Usage:
+ * const { user, loading, signOut } = useAuth()
+ */
+
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useSession, signOut as nextAuthSignOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 
-interface User {
-  id: number
-  email: string
-  name?: string | null
-}
-
 export function useAuth() {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { data: session, status } = useSession()
   const router = useRouter()
 
-  useEffect(() => {
-    checkAuth()
-  }, [])
+  const user = session?.user ?? null
+  const loading = status === 'loading'
 
-  const checkAuth = async () => {
+  /**
+   * Sign out the current user
+   * Clears session and redirects to home page
+   */
+  const signOut = async () => {
     try {
-      const response = await fetch('/api/auth/me')
-      const data = await response.json()
-      
-      if (response.ok && data.user) {
-        setUser(data.user)
-      } else {
-        setUser(null)
-      }
-    } catch (error) {
-      setUser(null)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const logout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST' })
-      setUser(null)
-      router.push('/login')
+      await nextAuthSignOut({ redirect: false })
+      router.push('/')
       router.refresh()
     } catch (error) {
-      console.error('Logout error:', error)
+      console.error('Sign out error:', error)
     }
   }
 
-  return { user, loading, logout, checkAuth }
+  return {
+    user,
+    loading,
+    signOut,
+    isAuthenticated: !!user,
+  }
 }
-

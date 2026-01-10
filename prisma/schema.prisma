@@ -1,5 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
+// Prisma schema for BooksExchange
+// This schema is designed for a book swapping platform with points-based exchanges
 
 generator client {
   provider = "prisma-client-js"
@@ -10,29 +10,283 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// User model - Core identity and authentication
+// Designed for:
+// - Secure authentication (password hashing handled in application layer)
+// - Points-based book exchange system
+// - Future OAuth support (email can be nullable for OAuth-only users)
+// - Soft deletion support (deletedAt field for future implementation)
 model User {
-  id        Int      @id @default(autoincrement())
-  email     String   @unique
-  name      String?
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+  id       String  @id @default(uuid()) // UUID for better security and distributed systems
+  email    String  @unique // Unique email for authentication
+  name     String? // Optional name (users might want to stay anonymous)
+  password String // Hashed password (bcrypt) - required for credentials auth
+  points   Int     @default(20) // Starting balance for book exchanges
 
-model Chat {
-  id        Int       @id @default(autoincrement())
-  name      String
-  messages  Message[]
+  // Timestamps
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // Soft deletion support - null means active user
+
+  // NextAuth relations
+  accounts Account[]
+  sessions Session[]
+
+  // Book relationships
+  ownedBooks    Book[]     @relation("BookOwner") // Books currently owned by this user
+  wishlistItems Wishlist[] // Books in user's wishlist
+
+  // Exchange relationships
+  exchangesSent     Exchange[] @relation("ExchangeFromUser") // Exchanges where user is the owner
+  exchangesReceived Exchange[] @relation("ExchangeToUser") // Exchanges where user is the requester
+
+  // Future relationships
+  // messages        Message[]
+  // forumPosts      ForumPost[]
+
+  // Indexes for performance
+  @@index([email])
+  @@index([deletedAt]) // For filtering active users efficiently
+  @@map("users")
 }
 
-model Message {
-  id        Int      @id @default(autoincrement())
-  name      String
-  message   String
-  roomId    Int
-  room      Chat     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+// NextAuth required tables for session management
+// These are required by NextAuth v5 with Prisma adapter
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// Book Condition Enum
+// Used to signal book quality and help with point valuation
+enum BookCondition {
+  POOR // Significant wear, may have missing pages
+  FAIR // Noticeable wear but functional
+  GOOD // Minor wear, well-maintained
+  EXCELLENT // Like new, minimal wear
+}
+
+// Book Model - Single Digital Identity Per Physical Book
+// 
+// CRITICAL DESIGN PRINCIPLE:
+// Each physical book has exactly ONE digital identity in the database.
+// Ownership is TRANSFERRED, not copied, during exchanges.
+// This ensures:
+// - QR code history is preserved
+// - No duplicate books can exist
+// - Trust in the point system is maintained
+//
+// Ownership Rules:
+// - A book MUST always have exactly one current owner (currentOwnerId is required)
+// - Ownership is transferred, not duplicated, on exchange
+// - Only the current owner can modify availability or approve exchanges
+model Book {
+  id String @id @default(uuid()) // UUID for unique identity
+
+  // Basic Information
+  title       String // Book title (required)
+  author      String // Author name (required)
+  description String? @db.Text // Optional description
+
+  // Condition & Value Signals
+  condition BookCondition @default(GOOD) // Physical condition of the book
+  images    String[] // Array of image URLs (optional, but supported)
+  location  String // City or region (required for discovery)
+  
+  // AI-Based Point Valuation
+  // This field caches the AI-computed point value to avoid repeated API calls
+  // Recalculated when: condition changes, wishlist count changes significantly, or rarity changes
+  computedPoints Int? // AI-calculated point value (5-20 range), null means not yet calculated
+  pointsLastCalculatedAt DateTime? // When points were last calculated (for cache invalidation)
+
+  // Ownership & Availability
+  // CRITICAL: currentOwnerId is required - a book MUST have an owner
+  // This enforces single ownership and prevents orphaned books
+  currentOwnerId String // Current owner (required, never null)
+  currentOwner   User   @relation("BookOwner", fields: [currentOwnerId], references: [id], onDelete: Restrict)
+
+  isAvailable Boolean  @default(true) // Whether book is available for exchange
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relationships
+  wishlistItems  Wishlist[] // Users who have this book in their wishlist
+  exchanges      Exchange[] // Exchanges involving this book
+  historyEntries BookHistoryEntry[] // History entries for this book
+
+  // Indexes for performance
+  @@index([currentOwnerId]) // Fast lookup of user's books
+  @@index([isAvailable]) // Fast filtering of available books
+  @@index([title]) // Fast search by title
+  @@index([author]) // Fast search by author
+  @@index([location]) // Fast filtering by location
+  @@map("books")
+}
+
+// Wishlist Model
+// 
+// Purpose:
+// - Allows users to signal interest in books
+// - Wishlist count will be used as "demand signal" for AI-based point valuation
+// - Supports discovery and matching algorithms
+//
+// Design:
+// - Many-to-many relationship between User and Book
+// - Unique constraint prevents duplicate wishlist entries
+// - Soft deletion ready (can add deletedAt later if needed)
+model Wishlist {
+  id        String   @id @default(uuid())
+  userId    String // User who added the book to wishlist
+  bookId    String // Book in the wishlist
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  // Prevent duplicate wishlist entries
+  @@unique([userId, bookId])
+  @@index([userId]) // Fast lookup of user's wishlist
+  @@index([bookId]) // Fast lookup of book's wishlist count
+  @@map("wishlists")
+}
+
+// Exchange Status Enum
+// Tracks the lifecycle of an exchange request
+enum ExchangeStatus {
+  REQUESTED // User has requested the book (points not deducted yet)
+  APPROVED // Owner approved, points deducted, ownership transferred
+  COMPLETED // Exchange is complete (final state)
+  REJECTED // Owner rejected the request (no points affected)
+  DISPUTED // Exchange is under dispute (points frozen)
+}
+
+// Exchange Model - Point-Based Book Exchange System
+//
+// CRITICAL DESIGN PRINCIPLES:
+// 1. Single Active Exchange: A book can have only ONE active exchange at a time
+//    This prevents conflicts and ensures clear ownership transfer
+//
+// 2. Points Deduction Timing: Points are deducted ONLY on approval, not on request
+//    This prevents point farming and allows owners to reject without penalty
+//
+// 3. Ownership Transfer: Book ownership is TRANSFERRED, not duplicated
+//    The book ID remains the same, only currentOwnerId changes
+//
+// 4. Atomic Operations: All critical updates (points, ownership) happen in transactions
+//    This ensures data consistency and prevents race conditions
+//
+// Anti-Abuse Features:
+// - Prevents repeat exchanges between same users (within time window)
+// - Blocks circular exchange patterns (A → B → A)
+// - Ensures only one active exchange per book
+model Exchange {
+  id String @id @default(uuid())
+
+  // Book being exchanged
+  bookId String
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Restrict)
+
+  // Users involved
+  fromUserId String // Current owner (who is giving the book)
+  fromUser   User   @relation("ExchangeFromUser", fields: [fromUserId], references: [id], onDelete: Restrict)
+
+  toUserId String // Requester (who wants the book)
+  toUser   User   @relation("ExchangeToUser", fields: [toUserId], references: [id], onDelete: Restrict)
+
+  // Exchange details
+  pointsUsed Int // Points deducted from requester (equal to book value)
+  status     ExchangeStatus @default(REQUESTED) // Current status of exchange
+
+  // Timestamps
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime? // When exchange was completed
+
+  // Indexes for performance and anti-abuse checks
+  @@index([bookId]) // Fast lookup of exchanges for a book
+  @@index([fromUserId]) // Fast lookup of exchanges sent by user
+  @@index([toUserId]) // Fast lookup of exchanges received by user
+  @@index([status]) // Fast filtering by status
+  @@index([fromUserId, toUserId, createdAt]) // For detecting repeat exchanges
+  @@map("exchanges")
+}
+
+// Book History Entry Model - Immutable Book Journey
+//
+// CRITICAL DESIGN PRINCIPLES:
+// 1. History is IMMUTABLE - entries are NEVER deleted
+// 2. History belongs to the BOOK, not users
+// 3. History survives user account deletion
+//
+// Why no userId reference:
+// - If a user deletes their account, history should remain
+// - History is about the book's journey, not user ownership
+// - Prevents data loss and maintains book identity
+//
+// Why displayName snapshot:
+// - Captures the name at time of entry
+// - Provides context even if user account is deleted
+// - Makes history more personal and readable
+//
+// Usage:
+// - Each new owner can add ONE entry when they receive the book
+// - Entries form a timeline showing the book's journey
+// - Accessible via QR code: /book-history/{bookId}
+model BookHistoryEntry {
+  id String @id @default(uuid())
+
+  // Book this entry belongs to
+  bookId String
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  // History details
+  city            String // City where book was read
+  readingDuration String? // How long the book was read (e.g., "2 weeks", "1 month")
+  notes           String? @db.Text // Personal notes about reading experience
+  displayName     String? // Snapshot of owner's name at time of entry (for display)
+
+  // Timestamps
+  createdAt DateTime @default(now())
+
+  // Indexes for performance
+  @@index([bookId]) // Fast lookup of all entries for a book
+  @@index([createdAt]) // For chronological ordering
+  @@map("book_history_entries")
 }

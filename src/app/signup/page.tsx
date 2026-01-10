@@ -1,11 +1,13 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
+import { signIn } from 'next-auth/react'
 
 export default function SignupPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -34,9 +36,29 @@ export default function SignupPage() {
         return
       }
 
-      // Redirect to home page
-      router.push('/')
-      router.refresh()
+      // After successful signup, automatically log the user in
+      // This provides better UX - users don't need to log in separately
+      try {
+        const result = await signIn('credentials', {
+          email,
+          password,
+          redirect: false,
+        })
+
+        if (result?.ok) {
+          // Successful login - redirect to callback URL or home
+          const callbackUrl = searchParams.get('callbackUrl') || '/'
+          router.push(callbackUrl)
+          router.refresh()
+        } else {
+          // If auto-login fails, redirect to login page
+          // User can log in manually with their new credentials
+          router.push('/login')
+        }
+      } catch (signInError) {
+        // If auto-login fails, redirect to login page
+        router.push('/login')
+      }
     } catch (err) {
       setError('An error occurred. Please try again.')
       setLoading(false)
