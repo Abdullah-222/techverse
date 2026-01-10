@@ -90,6 +90,18 @@ export async function POST(request: NextRequest) {
     // This is more reliable than server-side signIn in NextAuth v5
     // The client will call signIn after receiving success response
 
+    // Send welcome email (non-blocking)
+    try {
+      const { sendWelcomeEmail } = await import('@/lib/emailHelpers')
+      sendWelcomeEmail(user.id).catch((error) => {
+        console.error('Failed to send welcome email:', error)
+        // Don't fail signup if email fails
+      })
+    } catch (error) {
+      // Email import or send failed - log but don't block signup
+      console.error('Error setting up welcome email:', error)
+    }
+
     return NextResponse.json(
       {
         message: 'Account created successfully',

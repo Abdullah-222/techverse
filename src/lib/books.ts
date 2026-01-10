@@ -111,6 +111,16 @@ export async function addBook(bookData: {
       // Book is still created successfully, points can be calculated later
     }
 
+    // Send book added email notification (non-blocking)
+    try {
+      const { sendBookAddedEmail } = await import('./emailHelpers')
+      sendBookAddedEmail(book.id, user.id).catch((error) => {
+        console.error('Failed to send book added email:', error)
+      })
+    } catch (error) {
+      console.error('Error setting up book added email:', error)
+    }
+
     return book
   } catch (error: any) {
     // Handle Prisma errors gracefully

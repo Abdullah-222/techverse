@@ -196,6 +196,21 @@ export async function requestExchange(bookId: string) {
   })
 
   if (!requesterUser || requesterUser.points < requiredPoints) {
+    // Send insufficient points email (non-blocking)
+    try {
+      const { sendInsufficientPointsEmail } = await import('./emailHelpers')
+      sendInsufficientPointsEmail(
+        requester.id,
+        book.title,
+        requiredPoints,
+        requesterUser?.points || 0
+      ).catch((error) => {
+        console.error('Failed to send insufficient points email:', error)
+      })
+    } catch (error) {
+      console.error('Error setting up insufficient points email:', error)
+    }
+    
     throw new Error(
       `Insufficient points. Required: ${requiredPoints}, Available: ${requesterUser?.points || 0}`
     )
@@ -215,41 +230,51 @@ export async function requestExchange(bookId: string) {
     )
   }
 
-  // Create exchange request
-  // Status is REQUESTED - points are NOT deducted yet
-  try {
-    const exchange = await prisma.exchange.create({
-      data: {
-        bookId: book.id,
-        fromUserId: book.currentOwnerId, // Current owner
-        toUserId: requester.id, // Requester
-        pointsUsed: requiredPoints, // Points that will be deducted on approval
-        status: 'REQUESTED',
-      },
-      include: {
-        book: {
-          select: {
-            id: true,
-            title: true,
-            author: true,
+    // Create exchange request
+    // Status is REQUESTED - points are NOT deducted yet
+    try {
+      const exchange = await prisma.exchange.create({
+        data: {
+          bookId: book.id,
+          fromUserId: book.currentOwnerId, // Current owner
+          toUserId: requester.id, // Requester
+          pointsUsed: requiredPoints, // Points that will be deducted on approval
+          status: 'REQUESTED',
+        },
+        include: {
+          book: {
+            select: {
+              id: true,
+              title: true,
+              author: true,
+            },
+          },
+          fromUser: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          toUser: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-        fromUser: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        toUser: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    })
+      })
 
-    return exchange
+      // Send email notification to owner (non-blocking)
+      try {
+        const { sendExchangeRequestEmail } = await import('./emailHelpers')
+        sendExchangeRequestEmail(exchange.id).catch((error) => {
+          console.error('Failed to send exchange request email:', error)
+        })
+      } catch (error) {
+        console.error('Error setting up exchange request email:', error)
+      }
+
+      return exchange
   } catch (error: any) {
     // Handle Prisma errors gracefully
     if (error.code === 'P2003') {
@@ -414,6 +439,21 @@ export async function approveExchange(exchangeId: string) {
     return updatedExchange
     })
 
+    // Send email notifications (non-blocking)
+    try {
+      const { sendExchangeApprovedEmail, sendExchangeCompletedEmail } = await import('./emailHelpers')
+      // Send approved notification to requester
+      sendExchangeApprovedEmail(exchangeId).catch((error) => {
+        console.error('Failed to send exchange approved email:', error)
+      })
+      // Send completed notification to both parties
+      sendExchangeCompletedEmail(exchangeId).catch((error) => {
+        console.error('Failed to send exchange completed email:', error)
+      })
+    } catch (error) {
+      console.error('Error setting up exchange approval emails:', error)
+    }
+
     return result
   } catch (error: any) {
     // Handle Prisma errors gracefully
@@ -485,6 +525,16 @@ export async function rejectExchange(exchangeId: string) {
       },
     },
   })
+
+  // Send email notification to requester (non-blocking)
+  try {
+    const { sendExchangeRejectedEmail } = await import('./emailHelpers')
+    sendExchangeRejectedEmail(exchangeId).catch((error) => {
+      console.error('Failed to send exchange rejected email:', error)
+    })
+  } catch (error) {
+    console.error('Error setting up exchange rejected email:', error)
+  }
 
   return rejectedExchange
 }
@@ -582,6 +632,16 @@ export async function disputeExchange(
       },
     },
   })
+
+  // Send email notification to both parties (non-blocking)
+  try {
+    const { sendExchangeDisputedEmail } = await import('./emailHelpers')
+    sendExchangeDisputedEmail(exchangeId, reason).catch((error) => {
+      console.error('Failed to send exchange disputed email:', error)
+    })
+  } catch (error) {
+    console.error('Error setting up exchange disputed email:', error)
+  }
 
   return disputedExchange
 }
