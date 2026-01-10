@@ -36,7 +36,8 @@ import QRCode from 'qrcode'
  * Priority:
  * 1. NEXT_PUBLIC_APP_URL (explicitly set)
  * 2. VERCEL_URL (Vercel deployment)
- * 3. Empty string (fallback to relative URL - not recommended for production)
+ * 3. Default production domain (fallback for Vercel)
+ * 4. Empty string (fallback to relative URL - development only)
  * 
  * @returns Base URL without trailing slash
  */
@@ -50,6 +51,12 @@ function getPublicBaseUrl(): string {
   if (process.env.VERCEL_URL) {
     const protocol = process.env.VERCEL_ENV === 'production' ? 'https' : 'http'
     return `${protocol}://${process.env.VERCEL_URL}`
+  }
+
+  // Priority 3: Default production domain (for Vercel deployments)
+  // Update this to your production domain if needed
+  if (process.env.NODE_ENV === 'production') {
+    return 'https://readloom-p2301r21t-abdullahs-projects-5cd1a703.vercel.app'
   }
 
   // Fallback: empty string (will create relative URL)
