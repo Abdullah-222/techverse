@@ -1,7 +1,8 @@
 /**
  * Next.js Middleware for Route Protection
  * 
- * This middleware protects routes based on authentication status:
+ * This middleware protects routes based on authentication status.
+ * Uses lightweight cookie checking to avoid bundling heavy dependencies.
  * 
  * Protected routes (require authentication):
  * - /add-book - Adding books to the platform
@@ -18,18 +19,17 @@
  * - /signup - Signup page
  * 
  * Security considerations:
- * - Uses NextAuth's auth() function to check session
+ * - Checks NextAuth session cookie directly (lightweight)
  * - Redirects unauthenticated users to login
  * - Preserves intended destination for redirect after login
+ * - Full auth validation happens in API routes/server components
  */
 
-import { auth } from '@/auth'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
-export default auth((req) => {
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
-  const isAuthenticated = !!req.auth
 
   // Define protected routes
   // These routes require authentication
@@ -41,44 +41,31 @@ export default auth((req) => {
     '/reports',
   ]
 
-  // Define public routes that should be accessible without auth
-  // These routes are explicitly public
-  const publicRoutes = [
-    '/',
-    '/books',
-    '/book',
-    '/book-history',
-    '/forums',
-    '/login',
-    '/signup',
-  ]
-
   // Check if current path is a protected route
   const isProtectedRoute = protectedRoutes.some((route) =>
     pathname.startsWith(route)
   )
 
-  // Check if current path is a public route
-  const isPublicRoute = publicRoutes.some((route) =>
-    pathname === route || pathname.startsWith(route + '/')
-  )
+  // If accessing a protected route, check for session cookie
+  if (isProtectedRoute) {
+    // Check for NextAuth session cookie
+    // Based on auth.ts configuration: 'next-auth.session-token'
+    // In production with HTTPS, it may be prefixed with '__Secure-'
+    const sessionToken = 
+      req.cookies.get('next-auth.session-token')?.value ||
+      req.cookies.get('__Secure-next-auth.session-token')?.value
 
-  // If accessing a protected route without authentication
-  if (isProtectedRoute && !isAuthenticated) {
-    // Redirect to login with return URL
-    // This allows users to return to their intended destination after login
-    const loginUrl = new URL('/login', req.url)
-    loginUrl.searchParams.set('callbackUrl', pathname)
-    return NextResponse.redirect(loginUrl)
+    // If no session token, redirect to login
+    if (!sessionToken) {
+      const loginUrl = new URL('/login', req.url)
+      loginUrl.searchParams.set('callbackUrl', pathname)
+      return NextResponse.redirect(loginUrl)
+    }
   }
 
   // Allow all other requests to proceed
-  // This includes:
-  // - Public routes (accessible to everyone)
-  // - Protected routes accessed by authenticated users
-  // - API routes (handled separately)
   return NextResponse.next()
-})
+}
 
 // Configure which routes the middleware runs on
 // This improves performance by not running middleware on unnecessary routes
