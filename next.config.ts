@@ -10,9 +10,9 @@ const nextConfig: NextConfig = {
     // Add aliases to replace problematic modules with dummy implementations
     config.resolve.alias = {
       ...config.resolve.alias,
-      "@mediapipe/selfie_segmentation": path.resolve(__dirname, "./lib/dummy-mediapipe.js"),
-      "@100mslive/hms-virtual-background": path.resolve(__dirname, "./lib/dummy-hms-virtual-background.js"),
-      "@100mslive/hms-noise-cancellation": path.resolve(__dirname, "./lib/dummy-hms-noise-cancellation.js"),
+      "@mediapipe/selfie_segmentation": path.resolve(process.cwd(), "lib/dummy-mediapipe.js"),
+      "@100mslive/hms-virtual-background": path.resolve(process.cwd(), "lib/dummy-hms-virtual-background.js"),
+      "@100mslive/hms-noise-cancellation": path.resolve(process.cwd(), "lib/dummy-hms-noise-cancellation.js"),
     };
     return config;
   },
