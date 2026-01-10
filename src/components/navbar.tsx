@@ -27,6 +27,16 @@ export default function Navbar() {
                                     {link.name}
                                 </Link>
                             ))}
+                            {isAuthenticated && (
+                                <>
+                                    <Link href="/exchanges" className="py-1 px-3 hover:text-zinc-500">
+                                        Exchanges
+                                    </Link>
+                                    <Link href="/points" className="py-1 px-3 hover:text-zinc-500">
+                                        Buy Points
+                                    </Link>
+                                </>
+                            )}
                         </div>
 
                         <button className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)}>
@@ -67,6 +77,16 @@ export default function Navbar() {
                             {link.name}
                         </Link>
                     ))}
+                    {isAuthenticated && (
+                        <>
+                            <Link href="/exchanges" className="py-1 px-3" onClick={() => setIsMenuOpen(false)}>
+                                Exchanges
+                            </Link>
+                            <Link href="/points" className="py-1 px-3" onClick={() => setIsMenuOpen(false)}>
+                                Buy Points
+                            </Link>
+                        </>
+                    )}
                     {isAuthenticated ? (
                         <Link
                             href="/profile"

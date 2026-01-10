@@ -7,6 +7,7 @@
  * - /add-book - Adding books to the platform
  * - /exchange/* - Book exchange operations
  * - /profile - User profile page
+ * - /points - Buy points page
  * 
  * Public routes (accessible without authentication):
  * - /books - Browse all books
@@ -35,6 +36,7 @@ export default auth((req) => {
     '/add-book',
     '/exchange',
     '/profile',
+    '/points',
   ]
 
   // Define public routes that should be accessible without auth
