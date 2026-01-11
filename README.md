@@ -1,7 +1,6 @@
 # Readloom
 
-https://readloom-app.vercel.app/
-
+http://temp-smoky-three.vercel.app
 Readloom is a community-driven book swapping platform where books find new readers and stories continue their journey.
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
